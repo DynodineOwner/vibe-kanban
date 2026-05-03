@@ -40,6 +40,8 @@ pub mod container;
 mod copy;
 pub mod pty;
 
+const DEFAULT_SHARED_API_BASE: &str = "https://api.vibekanban.com";
+
 #[derive(Clone)]
 pub struct LocalDeployment {
     config: Arc<RwLock<Config>>,
@@ -156,21 +158,16 @@ impl Deployment for LocalDeployment {
 
         let api_base = std::env::var("VK_SHARED_API_BASE")
             .ok()
-            .or_else(|| option_env!("VK_SHARED_API_BASE").map(|s| s.to_string()));
+            .or_else(|| option_env!("VK_SHARED_API_BASE").map(|s| s.to_string()))
+            .unwrap_or_else(|| DEFAULT_SHARED_API_BASE.to_string());
 
-        let remote_client = match &api_base {
-            Some(url) => match RemoteClient::new(url, auth_context.clone()) {
-                Ok(client) => {
-                    tracing::info!("Remote client initialized with URL: {}", url);
-                    Ok(client)
-                }
-                Err(e) => {
-                    tracing::error!(?e, "failed to create remote client");
-                    Err(RemoteClientNotConfigured)
-                }
-            },
-            None => {
-                tracing::info!("VK_SHARED_API_BASE not set; remote features disabled");
+        let remote_client = match RemoteClient::new(&api_base, auth_context.clone()) {
+            Ok(client) => {
+                tracing::info!("Remote client initialized with URL: {}", api_base);
+                Ok(client)
+            }
+            Err(e) => {
+                tracing::error!(?e, "failed to create remote client");
                 Err(RemoteClientNotConfigured)
             }
         };
@@ -235,7 +232,7 @@ impl Deployment for LocalDeployment {
             approvals,
             queued_message_service,
             remote_client,
-            shared_api_base: api_base,
+            shared_api_base: Some(api_base),
             auth_context,
             oauth_handoffs,
             trusted_key_auth,
